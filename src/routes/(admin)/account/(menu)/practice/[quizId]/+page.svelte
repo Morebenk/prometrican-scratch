@@ -2,8 +2,13 @@
   import { onMount } from "svelte"
   import type { PageData } from "./$types"
   import { goto } from "$app/navigation"
+  import { getContext } from "svelte"
+  import type { Writable } from "svelte/store"
 
   export let data: PageData
+
+  let adminSection: Writable<string> = getContext("adminSection")
+  adminSection.set("practice")
 
   let currentQuestionIndex = 0
   let selectedChoices = new Map<string, string>()
@@ -37,6 +42,8 @@
   }
 
   async function updateAttempt(attemptData: any) {
+    if (!attempt.id) return
+
     const response = await fetch(`/api/quiz-attempts/${attempt.id}`, {
       method: "PATCH",
       headers: {
@@ -98,11 +105,7 @@
   }
 
   function handleRetry() {
-    selectedChoices = new Map()
-    currentQuestionIndex = 0
-    quizCompleted = false
-    score = 0
-    goto(`/practice/${quiz.id}`, { replaceState: true })
+    goto(`/account/practice/${quiz.id}`, { replaceState: true })
   }
 </script>
 
@@ -119,7 +122,7 @@
       <div
         class="bg-primary h-2.5 rounded-full transition-all duration-300"
         style="width: {progress}%"
-      />
+      ></div>
     </div>
     <div class="text-sm text-base-content/70">
       Question {currentQuestionIndex + 1} of {questions.length}
@@ -137,7 +140,9 @@
           <button class="btn btn-primary" on:click={handleRetry}>
             Try Again
           </button>
-          <a href="/practice" class="btn btn-outline"> Back to Practice </a>
+          <a href="/account/practice" class="btn btn-outline">
+            Back to Practice
+          </a>
         </div>
       </div>
     </div>
@@ -184,7 +189,7 @@
             disabled={!selectedChoices.has(currentQuestion.id) || isSubmitting}
           >
             {#if isSubmitting}
-              <span class="loading loading-spinner" />
+              <span class="loading loading-spinner"></span>
             {/if}
             {isLastQuestion ? "Submit Quiz" : "Next Question"}
           </button>

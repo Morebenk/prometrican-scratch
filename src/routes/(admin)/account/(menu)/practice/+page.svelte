@@ -3,8 +3,13 @@
   import { selectedSubject } from "./stores/subject-store"
   import type { PageData } from "./$types"
   import { goto } from "$app/navigation"
+  import { getContext } from "svelte"
+  import type { Writable } from "svelte/store"
 
   export let data: PageData
+
+  let adminSection: Writable<string> = getContext("adminSection")
+  adminSection.set("practice")
 
   $: subjects = data.subjects
   $: categories = data.categories
@@ -87,7 +92,7 @@
                       {quiz.completed_questions} / {quiz.total_questions} Questions
                     </span>
                     <a
-                      href="/practice/{quiz.id}"
+                      href="/account/practice/{quiz.id}"
                       class="btn btn-primary btn-sm"
                     >
                       {quiz.completed_questions > 0 ? "Continue" : "Start"}
@@ -98,7 +103,7 @@
                     class="progress progress-primary w-full mt-2"
                     value={quiz.completion}
                     max="100"
-                  />
+                  ></progress>
                 </div>
               {/each}
             </div>
