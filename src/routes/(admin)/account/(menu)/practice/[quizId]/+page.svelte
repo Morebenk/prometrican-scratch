@@ -19,6 +19,7 @@
   let showFeedback = true
   let timeStarted = Date.now()
   let timePerQuestion = new Map<string, number>()
+  let flaggedQuestions = new Set<string>()
 
   $: quiz = data.quiz
   $: questions = data.questions
@@ -31,11 +32,33 @@
   onMount(() => {
     initializeQuizState()
     const autoSaveInterval = setInterval(saveQuizState, 5000)
+    document.addEventListener("keydown", handleKeyboardNavigation)
     return () => {
       clearInterval(autoSaveInterval)
       saveQuizState()
+      document.removeEventListener("keydown", handleKeyboardNavigation)
     }
   })
+
+  function handleKeyboardNavigation(event: KeyboardEvent) {
+    if (event.key === "ArrowRight" && selectedChoices.has(currentQuestion.id)) {
+      handleNext()
+    } else if (event.key === "ArrowLeft" && currentQuestionIndex > 0) {
+      currentQuestionIndex--
+    } else if (event.key === "f") {
+      toggleFlag()
+    } else if (event.key === "b") {
+      toggleBookmark()
+    } else if (event.key >= "1" && event.key <= "4") {
+      const index = parseInt(event.key) - 1
+      if (index < currentQuestion.choices.length) {
+        handleChoiceSelect(
+          currentQuestion.id,
+          currentQuestion.choices[index].id,
+        )
+      }
+    }
+  }
 
   function initializeQuizState() {
     const savedState = localStorage.getItem(storageKey)
@@ -43,6 +66,7 @@
       const state = JSON.parse(savedState)
       selectedChoices = new Map(state.selectedChoices)
       bookmarkedQuestions = new Set(state.bookmarkedQuestions)
+      flaggedQuestions = new Set(state.flaggedQuestions)
       timePerQuestion = new Map(state.timePerQuestion)
       currentQuestionIndex = state.currentQuestionIndex || 0
       showFeedback = state.showFeedback ?? true
@@ -70,6 +94,7 @@
     const state = {
       selectedChoices: Array.from(selectedChoices.entries()),
       bookmarkedQuestions: Array.from(bookmarkedQuestions),
+      flaggedQuestions: Array.from(flaggedQuestions),
       timePerQuestion: Array.from(timePerQuestion.entries()),
       currentQuestionIndex,
       showFeedback,
@@ -78,7 +103,7 @@
   }
 
   async function handleChoiceSelect(questionId: string, choiceId: string) {
-    if (quizCompleted || selectedChoices.has(questionId)) return // Restrict further selections
+    if (quizCompleted || selectedChoices.has(questionId)) return
 
     const now = Date.now()
     if (!timePerQuestion.has(questionId)) {
@@ -92,7 +117,7 @@
 
     if (showFeedback) {
       const correctChoice = currentQuestion.choices.find((c) => c.is_correct)
-      if (correctChoice) {
+      if (correctChoice && choiceId !== correctChoice.id) {
         await recordIncorrectResponse(questionId, choiceId)
         incorrectChoices.set(questionId, [
           ...(incorrectChoices.get(questionId) || []),
@@ -219,6 +244,26 @@
       console.error("Error toggling bookmark:", error)
     }
   }
+
+  function toggleFlag() {
+    const questionId = currentQuestion.id
+    if (flaggedQuestions.has(questionId)) {
+      flaggedQuestions.delete(questionId)
+    } else {
+      flaggedQuestions.add(questionId)
+    }
+    flaggedQuestions = flaggedQuestions
+    saveQuizState()
+  }
+
+  function getQuestionStatus(index: number) {
+    const question = questions[index]
+    if (!question) return ""
+    if (flaggedQuestions.has(question.id)) return "flagged"
+    if (bookmarkedQuestions.has(question.id)) return "bookmarked"
+    if (selectedChoices.has(question.id)) return "answered"
+    return ""
+  }
 </script>
 
 <div class="container mx-auto px-4 py-8 max-w-4xl">
@@ -233,15 +278,17 @@
       </div>
 
       <div class="flex items-center gap-4">
-        <label class="cursor-pointer label gap-2">
-          <span class="label-text">Instant Feedback</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-primary"
-            bind:checked={showFeedback}
-            on:change={toggleFeedbackMode}
-          />
-        </label>
+        <div class="tooltip tooltip-left" data-tip="Toggle instant feedback">
+          <label class="cursor-pointer label gap-2">
+            <span class="label-text">Instant Feedback</span>
+            <input
+              type="checkbox"
+              class="toggle toggle-primary"
+              bind:checked={showFeedback}
+              on:change={toggleFeedbackMode}
+            />
+          </label>
+        </div>
       </div>
     </div>
 
@@ -257,33 +304,15 @@
       </div>
       <div class="w-full bg-base-200 rounded-full h-2.5">
         <div
-          class="bg-primary h-2.5 rounded-full transition-all duration-300"
+          class="bg-primary h-2.5 rounded-full transition-all duration-300 ease-in-out"
           style="width: {progress}%"
         ></div>
       </div>
     </div>
-
-    <!-- Question Navigation -->
-    <div class="mt-4 overflow-x-auto hide-scrollbar">
-      <div class="flex gap-2 pb-2">
-        {#each questions as question, index}
-          {@const isAnswered = selectedChoices.has(question.id)}
-          {@const isCurrent = index === currentQuestionIndex}
-          <button
-            class="btn btn-sm min-w-[3rem] {isCurrent
-              ? 'btn-primary'
-              : ''} {isAnswered ? 'btn-outline' : 'btn-ghost'}"
-            on:click={() => navigateToQuestion(index)}
-          >
-            Q{index + 1}
-          </button>
-        {/each}
-      </div>
-    </div>
   </div>
-  <!-- Quiz Content -->
+
   {#if quizCompleted}
-    <div class="card bg-base-100 shadow-xl">
+    <div class="card bg-base-100 shadow-xl transition-all duration-300">
       <div class="card-body">
         <h2 class="card-title mb-4">Quiz Completed!</h2>
 
@@ -325,7 +354,9 @@
                 (c) => c.is_correct,
               )}
               {@const isCorrect = selectedChoice === correctChoice?.id}
-              <div class="bg-base-200 p-4 rounded-lg">
+              <div
+                class="bg-base-200 p-4 rounded-lg transition-all duration-300"
+              >
                 <div class="flex justify-between items-start gap-4 mb-2">
                   <div class="flex-grow">
                     <h4 class="font-medium mb-1">Question {index + 1}</h4>
@@ -360,7 +391,7 @@
                     {@const isSelected = choice.id === selectedChoice}
                     {@const isCorrectChoice = choice.id === correctChoice?.id}
                     <div
-                      class="p-3 rounded-lg flex items-start gap-3 {isSelected &&
+                      class="p-3 rounded-lg flex items-start gap-3 transition-all duration-200 {isSelected &&
                       isCorrectChoice
                         ? 'bg-success/20'
                         : isSelected
@@ -446,27 +477,52 @@
             <h2 class="text-xl font-medium">
               Question {currentQuestionIndex + 1}
             </h2>
-            <button
-              class="btn btn-ghost btn-sm gap-2"
-              on:click={toggleBookmark}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-5 w-5"
-                fill={bookmarkedQuestions.has(currentQuestion.id)
-                  ? "currentColor"
-                  : "none"}
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+            <div class="flex gap-2">
+              <button
+                class="btn btn-ghost btn-sm tooltip tooltip-left"
+                data-tip="Flag question (F)"
+                on:click={toggleFlag}
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  fill={flaggedQuestions.has(currentQuestion.id)
+                    ? "currentColor"
+                    : "none"}
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"
+                  />
+                </svg>
+              </button>
+              <button
+                class="btn btn-ghost btn-sm tooltip tooltip-left"
+                data-tip="Bookmark question (B)"
+                on:click={toggleBookmark}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  fill={bookmarkedQuestions.has(currentQuestion.id)
+                    ? "currentColor"
+                    : "none"}
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <p class="mb-4">{currentQuestion.content}</p>
@@ -481,25 +537,36 @@
 
         <!-- Choices -->
         <div class="space-y-3">
-          {#each currentQuestion.choices as choice}
+          {#each currentQuestion.choices as choice, i}
             {@const isSelected =
               selectedChoices.get(currentQuestion.id) === choice.id}
             {@const wasIncorrect = incorrectChoices
               .get(currentQuestion.id)
               ?.includes(choice.id)}
             <button
-              class="w-full btn justify-start normal-case px-4 py-3 h-auto min-h-[3rem]
+              class="w-full btn justify-start normal-case px-4 py-3 h-auto min-h-[3rem] transition-all duration-200
               {isSelected ? 'btn-primary' : 'btn-outline'} 
               {wasIncorrect ? 'btn-error' : ''}"
               on:click={() => handleChoiceSelect(currentQuestion.id, choice.id)}
+              aria-label="Choice {i + 1}"
             >
+              <span class="mr-3 opacity-70">{i + 1}.</span>
               {choice.content}
             </button>
           {/each}
         </div>
 
         <!-- Navigation -->
-        <div class="flex justify-end mt-6">
+        <div class="flex justify-between mt-6">
+          <button
+            class="btn btn-outline {currentQuestionIndex === 0
+              ? 'btn-disabled'
+              : ''}"
+            on:click={() => currentQuestionIndex--}
+            disabled={currentQuestionIndex === 0}
+          >
+            Previous
+          </button>
           <button
             class="btn btn-primary {!selectedChoices.has(currentQuestion.id)
               ? 'btn-disabled'
@@ -512,6 +579,47 @@
             {/if}
             {isLastQuestion ? "Submit Quiz" : "Next Question"}
           </button>
+        </div>
+
+        <!-- Question Navigation -->
+        <div class="mt-6 overflow-x-auto hide-scrollbar">
+          <div class="flex gap-2 pb-2">
+            {#each questions as question, index}
+              {@const status = getQuestionStatus(index)}
+              {@const isCurrent = index === currentQuestionIndex}
+              <button
+                class="btn btn-sm min-w-[3rem] relative {isCurrent
+                  ? 'btn-primary'
+                  : status === 'answered'
+                    ? 'btn-outline'
+                    : 'btn-ghost'}"
+                on:click={() => navigateToQuestion(index)}
+              >
+                {#if status === "flagged"}
+                  <div class="absolute -top-1 -right-1">
+                    <span class="badge badge-xs badge-warning"></span>
+                  </div>
+                {/if}
+                {#if status === "bookmarked"}
+                  <div class="absolute -top-1 -right-1">
+                    <span class="badge badge-xs badge-info"></span>
+                  </div>
+                {/if}
+                Q{index + 1}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts Help -->
+        <div class="mt-4 text-sm text-base-content/70">
+          <p>Keyboard shortcuts:</p>
+          <ul class="list-disc list-inside">
+            <li>Arrow keys: Navigate between questions</li>
+            <li>1-4: Select answer choices</li>
+            <li>F: Flag question</li>
+            <li>B: Bookmark question</li>
+          </ul>
         </div>
       </div>
     </div>
@@ -537,5 +645,21 @@
 
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Fade animations */
+  .card {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>
