@@ -9,8 +9,6 @@
 
   interface Profile {
     full_name?: string
-    company_name?: string
-    website?: string
   }
 
   interface Props {
@@ -24,8 +22,6 @@
 
   let loading = $state(false)
   let fullName: string = profile?.full_name ?? ""
-  let companyName: string = profile?.company_name ?? ""
-  let website: string = profile?.website ?? ""
 
   const fieldError = (liveForm: FormAccountUpdateResult, name: string) => {
     let errors = liveForm?.errorFields ?? []
@@ -75,7 +71,7 @@
           />
         </div>
 
-        <div class="mt-4">
+        <!-- <div class="mt-4">
           <label for="companyName">
             <span class="text-l text-center">Company Name</span>
           </label>
@@ -90,9 +86,9 @@
             value={form?.companyName ?? companyName}
             maxlength="50"
           />
-        </div>
+        </div> -->
 
-        <div class="mt-4">
+        <!-- <div class="mt-4">
           <label for="website">
             <span class="text-l text-center">Company Website</span>
           </label>
@@ -107,7 +103,7 @@
             value={form?.website ?? website}
             maxlength="50"
           />
-        </div>
+        </div> -->
 
         {#if form?.errorMessage}
           <p class="text-red-700 text-sm font-bold text-center mt-3">

@@ -9,7 +9,7 @@ import {
 } from "@supabase/ssr"
 import { redirect } from "@sveltejs/kit"
 import type { Database } from "../../../DatabaseDefinitions.js"
-import { CreateProfileStep } from "../../../config"
+import { CreateProfileStep } from "../../../config.js"
 import { load_helper } from "$lib/load_helpers"
 
 export const load = async ({ fetch, data, depends, url }) => {
@@ -75,12 +75,5 @@ export const _hasFullProfile = (
   if (!profile.full_name) {
     return false
   }
-  if (!profile.company_name) {
-    return false
-  }
-  if (!profile.website) {
-    return false
-  }
-
   return true
 }

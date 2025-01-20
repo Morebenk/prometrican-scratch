@@ -1,11 +1,12 @@
 -- Create a table for public profiles
-create table profiles (
-  id uuid references auth.users on delete cascade not null primary key,
-  updated_at timestamp with time zone,
-  full_name text,
-  company_name text,
-  avatar_url text,
-  website text
+CREATE TABLE profiles (
+    id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email text,
+    full_name text,
+    avatar_url text,
+    is_admin boolean DEFAULT false,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
 );
 -- Set up Row Level Security (RLS)
 -- See https://supabase.com/docs/guides/auth/row-level-security for more details.
@@ -36,11 +37,8 @@ alter table stripe_customers enable row level security;
 create table contact_requests (
   id uuid primary key default gen_random_uuid(),
   updated_at timestamp with time zone,
-  first_name text,
-  last_name text,
+  full_name text,
   email text,
-  phone text,
-  company_name text,
   message_body text
 );
 alter table contact_requests enable row level security;
@@ -70,3 +68,18 @@ create policy "Avatar images are publicly accessible." on storage.objects
 
 create policy "Anyone can upload an avatar." on storage.objects
   for insert with check (bucket_id = 'avatars');
+
+
+-- Create a trigger to handle updating updated_at columns
+CREATE OR REPLACE FUNCTION handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_timestamp_profiles
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE PROCEDURE handle_updated_at();
