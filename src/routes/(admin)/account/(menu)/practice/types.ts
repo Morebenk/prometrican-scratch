@@ -1,31 +1,60 @@
-export interface Subject {
-  id: string
-  name: string
-  description: string | null
+// Database table types that match the schema
+export interface DbQuizAttempt {
+  id: string // Required by database
+  user_id: string
+  quiz_id: string
+  started_at: Date
+  completed_at?: Date | null
+  last_answered_question_id?: string | null
+  score: number
 }
 
-export interface Category {
+export interface DbQuestion {
   id: string
-  subject_id: string
-  name: string
-  description: string | null
-  quizzes: Quiz[]
-  completion: number
+  content: string
+  explanation: string | null
+  image_url: string | null
+  choices: DbChoice[]
 }
 
-export interface Quiz {
+export interface DbChoice {
+  id: string
+  content: string
+  is_correct: boolean
+  explanation: string | null
+}
+
+// Application types
+export interface QuizData {
   id: string
   title: string
   description: string | null
-  category_id: string
-  completion: number
-  total_questions: number
-  completed_questions: number
+  category: {
+    id: string
+    name: string
+    subject_id: string
+    subject: {
+      id: string
+      name: string
+    }
+  }
 }
 
-export interface QuizAttempt {
-  id: string
-  quiz_id: string
-  completed_at: string | null
-  score: number
+export interface QuizQuestion extends DbQuestion {
+  order: number
+  isBookmarked: boolean
+  incorrectChoices: string[]
+}
+
+// Response types
+export interface BookmarkResponse {
+  success: boolean
+}
+
+export interface QuizAttemptUpdateResponse {
+  success: boolean
+}
+
+export interface IncorrectResponsesResponse {
+  incorrectChoices: string[]
 }
