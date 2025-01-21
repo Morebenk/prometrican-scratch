@@ -1,10 +1,16 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "@sveltejs/kit";
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-  const { questionId, choiceId } = await request.json();
+interface FlagData {
+  questionId: string;
+  type: string;
+  reason: string;
+}
 
-  if (!questionId || !choiceId) {
+export const POST: RequestHandler = async ({ request, locals }) => {
+  const { questionId, type, reason } = (await request.json()) as FlagData;
+
+  if (!questionId || !type || !reason) {
     throw error(400, "Missing required fields");
   }
 
@@ -17,21 +23,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // Let Supabase generate the id and timestamp
     const { error: createError } = await supabase
-      .from("incorrect_responses")
+      .from("flagged_questions")
       .insert({
-        user_id: locals.user.id,
         question_id: questionId,
-        choice_id: choiceId,
+        user_id: locals.user.id,
+        reason: type,
+        details: reason,
+        status: "pending",
       });
 
     if (createError) {
       console.error("DB Error:", createError);
-      throw error(500, "Error recording incorrect response");
+      throw error(500, "Error creating flag");
     }
 
     return json({ success: true });
   } catch (e) {
-    console.error("Error recording incorrect response:", e);
+    console.error("Error creating flag:", e);
     throw error(500, "Internal server error");
   }
 };
