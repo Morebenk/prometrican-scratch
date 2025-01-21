@@ -109,7 +109,7 @@
           ? isSelected && !isCorrect
             ? 'btn-error'
             : isCorrectChoice
-              ? 'btn-success bg-opacity-50'
+              ? 'bg-success disabled:text-gray-800 disabled:bg-success/10 disabled:bg-opacity-100'
               : ''
           : ''}"
         on:click={() =>
@@ -121,9 +121,9 @@
       >
         <span class="mr-3 opacity-70">{i + 1}.</span>
         {choice.content}
-        {#if showFeedback && selectedChoice && isCorrectChoice}
+        <!-- {#if showFeedback && selectedChoice && isCorrectChoice}
           <span class="badge badge-success ml-2">Correct Answer</span>
-        {/if}
+        {/if} -->
       </button>
     {/each}
   </div>

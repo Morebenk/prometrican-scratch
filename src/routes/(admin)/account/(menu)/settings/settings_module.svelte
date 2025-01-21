@@ -1,39 +1,39 @@
 <script lang="ts">
-  import { enhance, applyAction } from "$app/forms"
-  import { page } from "$app/stores"
-  import type { SubmitFunction } from "@sveltejs/kit"
+  import { enhance, applyAction } from "$app/forms";
+  import { page } from "$app/stores";
+  import type { SubmitFunction } from "@sveltejs/kit";
 
   const fieldError = (liveForm: FormAccountUpdateResult, name: string) => {
-    let errors = liveForm?.errorFields ?? []
-    return errors.includes(name)
-  }
+    let errors = liveForm?.errorFields ?? [];
+    return errors.includes(name);
+  };
 
   // Page state
-  let loading = $state(false)
-  let showSuccess = $state(false)
+  let loading = $state(false);
+  let showSuccess = $state(false);
 
   type Field = {
-    inputType?: string // default is "text"
-    id: string
-    label?: string
-    initialValue: string | boolean
-    placeholder?: string
-    maxlength?: number
-  }
+    inputType?: string; // default is "text"
+    id: string;
+    label?: string;
+    initialValue: string | boolean;
+    placeholder?: string;
+    maxlength?: number;
+  };
 
   interface Props {
     // Module context
-    editable?: boolean
-    dangerous?: boolean
-    title?: string
-    message?: string
-    fields: Field[]
-    formTarget?: string
-    successTitle?: string
-    successBody?: string
-    editButtonTitle?: string | null
-    editLink?: string | null
-    saveButtonTitle?: string
+    editable?: boolean;
+    dangerous?: boolean;
+    title?: string;
+    message?: string;
+    fields: Field[];
+    formTarget?: string;
+    successTitle?: string;
+    successBody?: string;
+    editButtonTitle?: string | null;
+    editLink?: string | null;
+    saveButtonTitle?: string;
   }
 
   let {
@@ -48,19 +48,19 @@
     editButtonTitle = null,
     editLink = null,
     saveButtonTitle = "Save",
-  }: Props = $props()
+  }: Props = $props();
 
   const handleSubmit: SubmitFunction = () => {
-    loading = true
+    loading = true;
     return async ({ update, result }) => {
-      await update({ reset: false })
-      await applyAction(result)
-      loading = false
+      await update({ reset: false });
+      await applyAction(result);
+      loading = false;
       if (result.type === "success") {
-        showSuccess = true
+        showSuccess = true;
       }
-    }
-  }
+    };
+  };
 </script>
 
 <div class="card p-6 pb-7 mt-8 max-w-xl flex flex-col md:flex-row shadow">
@@ -97,26 +97,43 @@
         use:enhance={handleSubmit}
       >
         {#each fields as field}
-          {#if field.label}
-            <label for={field.id}>
-              <span class="text-sm text-gray-500">{field.label}</span>
+          {#if field.inputType === "checkbox"}
+            <label
+              class="flex items-start gap-3 mb-4 cursor-pointer hover:opacity-80"
+            >
+              <input
+                id={field.id}
+                name={field.id}
+                type="checkbox"
+                class="checkbox checkbox-error mt-1"
+                checked={field.initialValue === true}
+              />
+              <div class="flex flex-col">
+                <span class="font-medium">{field.label}</span>
+              </div>
             </label>
-          {/if}
-          {#if editable}
-            <input
-              id={field.id}
-              name={field.id}
-              type={field.inputType ?? "text"}
-              disabled={!editable}
-              placeholder={field.placeholder ?? field.label ?? ""}
-              class="{fieldError($page?.form, field.id)
-                ? 'input-error'
-                : ''} input-sm mt-1 input input-bordered w-full max-w-xs mb-3 text-base py-4"
-              value={$page.form ? $page.form[field.id] : field.initialValue}
-              maxlength={field.maxlength ? field.maxlength : null}
-            />
           {:else}
-            <div class="text-lg mb-3">{field.initialValue}</div>
+            {#if field.label}
+              <label for={field.id}>
+                <span class="text-sm text-gray-500">{field.label}</span>
+              </label>
+            {/if}
+            {#if editable}
+              <input
+                id={field.id}
+                name={field.id}
+                type={field.inputType ?? "text"}
+                disabled={!editable}
+                placeholder={field.placeholder ?? field.label ?? ""}
+                class="{fieldError($page?.form, field.id)
+                  ? 'input-error'
+                  : ''} input-sm mt-1 input input-bordered w-full max-w-xs mb-3 text-base py-4"
+                value={$page.form ? $page.form[field.id] : field.initialValue}
+                maxlength={field.maxlength ? field.maxlength : null}
+              />
+            {:else}
+              <div class="text-lg mb-3">{field.initialValue}</div>
+            {/if}
           {/if}
         {/each}
 

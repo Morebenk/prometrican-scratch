@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { getContext } from "svelte"
-  import type { Writable } from "svelte/store"
-  import SettingsModule from "./settings_module.svelte"
+  import { getContext } from "svelte";
+  import type { Writable } from "svelte/store";
+  import SettingsModule from "./settings_module.svelte";
 
-  let adminSection: Writable<string> = getContext("adminSection")
-  adminSection.set("settings")
+  let adminSection: Writable<string> = getContext("adminSection");
+  adminSection.set("settings");
 
-  let { data } = $props()
-  let { profile, user } = data
+  let { data } = $props();
+  let { profile, user } = data;
 </script>
 
 <svelte:head>
@@ -21,16 +21,6 @@
   editable={false}
   fields={[
     { id: "fullName", label: "Name", initialValue: profile?.full_name ?? "" },
-    // {
-    //   id: "companyName",
-    //   label: "Company Name",
-    //   initialValue: profile?.company_name ?? "",
-    // },
-    // {
-    //   id: "website",
-    //   label: "Company Website",
-    //   initialValue: profile?.website ?? "",
-    // },
   ]}
   editButtonTitle="Edit Profile"
   editLink="/account/settings/edit_profile"
@@ -66,7 +56,14 @@
 />
 
 <SettingsModule
-  title="Danger Zone"
+  editable={false}
+  dangerous={true}
+  fields={[]}
+  editButtonTitle="Reset Quiz Data"
+  editLink="/account/settings/reset_data"
+/>
+
+<SettingsModule
   editable={false}
   dangerous={true}
   fields={[]}
