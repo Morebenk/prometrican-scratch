@@ -1,99 +1,99 @@
-import { fail, redirect } from "@sveltejs/kit"
-import { sendAdminEmail, sendUserEmail } from "$lib/mailer"
-import { WebsiteBaseUrl } from "../../../../config"
+import { fail, redirect } from "@sveltejs/kit";
+import { sendAdminEmail, sendUserEmail } from "$lib/mailer";
+import { WebsiteBaseUrl } from "../../../config";
 
 export const actions = {
   toggleEmailSubscription: async ({ locals: { supabase, safeGetSession } }) => {
-    const { session } = await safeGetSession()
+    const { session } = await safeGetSession();
 
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login");
     }
 
     const { data: currentProfile } = await supabase
       .from("profiles")
       .select("unsubscribed")
       .eq("id", session.user.id)
-      .single()
+      .single();
 
-    const newUnsubscribedStatus = !currentProfile?.unsubscribed
+    const newUnsubscribedStatus = !currentProfile?.unsubscribed;
 
     const { error } = await supabase
       .from("profiles")
       .update({ unsubscribed: newUnsubscribedStatus })
-      .eq("id", session.user.id)
+      .eq("id", session.user.id);
 
     if (error) {
-      console.error("Error updating subscription status", error)
-      return fail(500, { message: "Failed to update subscription status" })
+      console.error("Error updating subscription status", error);
+      return fail(500, { message: "Failed to update subscription status" });
     }
 
     return {
       unsubscribed: newUnsubscribedStatus,
-    }
+    };
   },
   updateEmail: async ({ request, locals: { supabase, safeGetSession } }) => {
-    const { session } = await safeGetSession()
+    const { session } = await safeGetSession();
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login");
     }
 
-    const formData = await request.formData()
-    const email = formData.get("email") as string
+    const formData = await request.formData();
+    const email = formData.get("email") as string;
 
-    let validationError
+    let validationError;
     if (!email || email === "") {
-      validationError = "An email address is required"
+      validationError = "An email address is required";
     }
     // Dead simple check -- there's no standard here (which is followed),
     // and lots of errors will be missed until we actually email to verify, so
     // just do that
     else if (!email.includes("@")) {
-      validationError = "A valid email address is required"
+      validationError = "A valid email address is required";
     }
     if (validationError) {
       return fail(400, {
         errorMessage: validationError,
         errorFields: ["email"],
         email,
-      })
+      });
     }
 
     // Supabase does not change the email until the user verifies both
     // if 'Secure email change' is enabled in the Supabase dashboard
-    const { error } = await supabase.auth.updateUser({ email: email })
+    const { error } = await supabase.auth.updateUser({ email: email });
 
     if (error) {
-      console.error("Error updating email", error)
+      console.error("Error updating email", error);
       return fail(500, {
         errorMessage: "Unknown error. If this persists please contact us.",
         email,
-      })
+      });
     }
 
     return {
       email,
-    }
+    };
   },
   updatePassword: async ({ request, locals: { supabase, safeGetSession } }) => {
-    const { session, user, amr } = await safeGetSession()
+    const { session, user, amr } = await safeGetSession();
     if (!session) {
-      redirect(303, "/login")
+      redirect(303, "/login");
     }
 
-    const formData = await request.formData()
-    const newPassword1 = formData.get("newPassword1") as string
-    const newPassword2 = formData.get("newPassword2") as string
-    const currentPassword = formData.get("currentPassword") as string
+    const formData = await request.formData();
+    const newPassword1 = formData.get("newPassword1") as string;
+    const newPassword2 = formData.get("newPassword2") as string;
+    const currentPassword = formData.get("currentPassword") as string;
 
     // Can check if we're a "password recovery" session by checking session amr
     // let currentPassword take priority if provided (user can use either form)
-    const recoveryAmr = amr?.find((x) => x.method === "recovery")
-    const isRecoverySession = recoveryAmr && !currentPassword
+    const recoveryAmr = amr?.find((x) => x.method === "recovery");
+    const isRecoverySession = recoveryAmr && !currentPassword;
 
     // if this is password recovery session, check timestamp of recovery session
     if (isRecoverySession) {
-      const timeSinceLogin = Date.now() - recoveryAmr.timestamp * 1000
+      const timeSinceLogin = Date.now() - recoveryAmr.timestamp * 1000;
       if (timeSinceLogin > 1000 * 60 * 15) {
         // 15 mins in milliseconds
         return fail(400, {
@@ -103,37 +103,37 @@ export const actions = {
           newPassword1,
           newPassword2,
           currentPassword: "",
-        })
+        });
       }
     }
 
-    let validationError
-    const errorFields = []
+    let validationError;
+    const errorFields = [];
     if (!newPassword1) {
-      validationError = "You must type a new password"
-      errorFields.push("newPassword1")
+      validationError = "You must type a new password";
+      errorFields.push("newPassword1");
     }
     if (!newPassword2) {
-      validationError = "You must type the new password twice"
-      errorFields.push("newPassword2")
+      validationError = "You must type the new password twice";
+      errorFields.push("newPassword2");
     }
     if (newPassword1.length < 6) {
-      validationError = "The new password must be at least 6 charaters long"
-      errorFields.push("newPassword1")
+      validationError = "The new password must be at least 6 charaters long";
+      errorFields.push("newPassword1");
     }
     if (newPassword1.length > 72) {
-      validationError = "The new password can be at most 72 charaters long"
-      errorFields.push("newPassword1")
+      validationError = "The new password can be at most 72 charaters long";
+      errorFields.push("newPassword1");
     }
     if (newPassword1 != newPassword2) {
-      validationError = "The passwords don't match"
-      errorFields.push("newPassword1")
-      errorFields.push("newPassword2")
+      validationError = "The passwords don't match";
+      errorFields.push("newPassword1");
+      errorFields.push("newPassword2");
     }
     if (!currentPassword && !isRecoverySession) {
       validationError =
-        "You must include your current password. If you forgot it, sign out then use 'forgot password' on the sign in page."
-      errorFields.push("currentPassword")
+        "You must include your current password. If you forgot it, sign out then use 'forgot password' on the sign in page.";
+      errorFields.push("currentPassword");
     }
     if (validationError) {
       return fail(400, {
@@ -142,7 +142,7 @@ export const actions = {
         newPassword1,
         newPassword2,
         currentPassword,
-      })
+      });
     }
 
     // Check current password is correct before updating, but only if they didn't log in with "recover" link
@@ -152,43 +152,43 @@ export const actions = {
       const { error } = await supabase.auth.signInWithPassword({
         email: user?.email || "",
         password: currentPassword,
-      })
+      });
       if (error) {
         // The user was logged out because of bad password. Redirect to error page explaining.
-        redirect(303, "/login/current_password_error")
+        redirect(303, "/login/current_password_error");
       }
     }
 
     const { error } = await supabase.auth.updateUser({
       password: newPassword1,
-    })
+    });
     if (error) {
-      console.error("Error updating password", error)
+      console.error("Error updating password", error);
       return fail(500, {
         errorMessage: "Unknown error. If this persists please contact us.",
         newPassword1,
         newPassword2,
         currentPassword,
-      })
+      });
     }
 
     return {
       newPassword1,
       newPassword2,
       currentPassword,
-    }
+    };
   },
   deleteAccount: async ({
     request,
     locals: { supabase, supabaseServiceRole, safeGetSession },
   }) => {
-    const { session, user } = await safeGetSession()
+    const { session, user } = await safeGetSession();
     if (!session || !user?.id) {
-      redirect(303, "/login")
+      redirect(303, "/login");
     }
 
-    const formData = await request.formData()
-    const currentPassword = formData.get("currentPassword") as string
+    const formData = await request.formData();
+    const currentPassword = formData.get("currentPassword") as string;
 
     if (!currentPassword) {
       return fail(400, {
@@ -196,54 +196,54 @@ export const actions = {
           "You must provide your current password to delete your account. If you forgot it, sign out then use 'forgot password' on the sign in page.",
         errorFields: ["currentPassword"],
         currentPassword,
-      })
+      });
     }
 
     // Check current password is correct before deleting account
     const { error: pwError } = await supabase.auth.signInWithPassword({
       email: user?.email || "",
       password: currentPassword,
-    })
+    });
     if (pwError) {
       // The user was logged out because of bad password. Redirect to error page explaining.
-      redirect(303, "/login/current_password_error")
+      redirect(303, "/login/current_password_error");
     }
 
     const { error } = await supabaseServiceRole.auth.admin.deleteUser(
       user.id,
       true,
-    )
+    );
     if (error) {
-      console.error("Error deleting user", error)
+      console.error("Error deleting user", error);
       return fail(500, {
         errorMessage: "Unknown error. If this persists please contact us.",
         currentPassword,
-      })
+      });
     }
 
-    await supabase.auth.signOut()
-    redirect(303, "/")
+    await supabase.auth.signOut();
+    redirect(303, "/");
   },
   updateProfile: async ({ request, locals: { supabase, safeGetSession } }) => {
-    const { session, user } = await safeGetSession()
+    const { session, user } = await safeGetSession();
     if (!session || !user?.id) {
-      redirect(303, "/login")
+      redirect(303, "/login");
     }
 
-    const formData = await request.formData()
-    const fullName = formData.get("fullName") as string
+    const formData = await request.formData();
+    const fullName = formData.get("fullName") as string;
     // const companyName = formData.get("companyName") as string
     // const website = formData.get("website") as string
 
-    let validationError
-    const fieldMaxTextLength = 50
-    const errorFields = []
+    let validationError;
+    const fieldMaxTextLength = 50;
+    const errorFields = [];
     if (!fullName) {
-      validationError = "Name is required"
-      errorFields.push("fullName")
+      validationError = "Name is required";
+      errorFields.push("fullName");
     } else if (fullName.length > fieldMaxTextLength) {
-      validationError = `Name must be less than ${fieldMaxTextLength} characters`
-      errorFields.push("fullName")
+      validationError = `Name must be less than ${fieldMaxTextLength} characters`;
+      errorFields.push("fullName");
     }
     // if (!companyName) {
     //   validationError =
@@ -268,7 +268,7 @@ export const actions = {
         fullName,
         // companyName,
         // website,
-      })
+      });
     }
 
     // To check if created or updated, check if priorProfile exists
@@ -276,7 +276,7 @@ export const actions = {
       .from("profiles")
       .select(`*`)
       .eq("id", session?.user.id)
-      .single()
+      .single();
 
     const { error } = await supabase
       .from("profiles")
@@ -288,27 +288,27 @@ export const actions = {
         updated_at: new Date(),
         unsubscribed: priorProfile?.unsubscribed ?? false,
       })
-      .select()
+      .select();
 
     if (error) {
-      console.error("Error updating profile", error)
+      console.error("Error updating profile", error);
       return fail(500, {
         errorMessage: "Unknown error. If this persists please contact us.",
         fullName,
         // companyName,
         // website,
-      })
+      });
     }
 
     // If the profile was just created, send an email to the user and admin
     const newProfile =
-      priorProfile?.updated_at === null && priorProfileError === null
+      priorProfile?.updated_at === null && priorProfileError === null;
     if (newProfile) {
       await sendAdminEmail({
         subject: "Profile Created",
         body: `Profile created by ${session.user.email}\nFull name: ${fullName}\n`,
         // Company name: ${companyName}\nWebsite: ${website}`,
-      })
+      });
 
       // Send welcome email
       await sendUserEmail({
@@ -320,22 +320,22 @@ export const actions = {
           companyName: "Prometrican",
           WebsiteBaseUrl: WebsiteBaseUrl,
         },
-      })
+      });
     }
 
     return {
       fullName,
       // companyName,
       // website,
-    }
+    };
   },
   signout: async ({ locals: { supabase, safeGetSession } }) => {
-    const { session } = await safeGetSession()
+    const { session } = await safeGetSession();
     if (session) {
-      await supabase.auth.signOut()
-      redirect(303, "/")
+      await supabase.auth.signOut();
+      redirect(303, "/");
     } else {
-      redirect(303, "/")
+      redirect(303, "/");
     }
   },
-}
+};

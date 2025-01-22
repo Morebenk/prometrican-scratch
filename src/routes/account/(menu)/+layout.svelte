@@ -1,26 +1,26 @@
 <script lang="ts">
-  import "../../../../app.css"
-  import { writable } from "svelte/store"
-  import { setContext } from "svelte"
-  import { WebsiteName } from "../../../../config"
+  import "../../../app.css";
+  import { writable } from "svelte/store";
+  import { setContext } from "svelte";
+  import { WebsiteName } from "../../../config";
   interface Props {
-    children?: import("svelte").Snippet
+    children?: import("svelte").Snippet;
   }
 
-  let { children }: Props = $props()
+  let { children }: Props = $props();
 
-  const adminSectionStore = writable("")
-  setContext("adminSection", adminSectionStore)
-  let adminSection: string | undefined = $state()
+  const adminSectionStore = writable("");
+  setContext("adminSection", adminSectionStore);
+  let adminSection: string | undefined = $state();
   adminSectionStore.subscribe((value) => {
-    adminSection = value
-  })
+    adminSection = value;
+  });
 
   function closeDrawer(): void {
     const adminDrawer = document.getElementById(
       "admin-drawer",
-    ) as HTMLInputElement
-    adminDrawer.checked = false
+    ) as HTMLInputElement;
+    adminDrawer.checked = false;
   }
 </script>
 
