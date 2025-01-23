@@ -341,6 +341,77 @@ export interface Database {
           },
         ];
       };
+      incorrect_responses: {
+        Row: {
+          id: string;
+          user_id: string;
+          question_id: string;
+          choice_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          question_id: string;
+          choice_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          question_id?: string;
+          choice_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "incorrect_responses_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "incorrect_responses_question_id_fkey";
+            columns: ["question_id"];
+            referencedRelation: "questions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "incorrect_responses_choice_id_fkey";
+            columns: ["choice_id"];
+            referencedRelation: "choices";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      bookmarks: {
+        Row: {
+          id: string;
+          user_id: string;
+          question_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          question_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          question_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "bookmarks_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       flagged_questions: {
         Row: {
           id: string;

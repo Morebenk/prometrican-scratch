@@ -38,40 +38,45 @@ export const actions: Actions = {
 
       // Perform selective deletions based on user choices
       if (resetAttempts) {
-        const { error: deleteQuizAttempts } = await supabase
-          .from("quiz_attempts")
-          .delete()
-          .eq("user_id", userId);
+        const { error: deleteQuizAttemptsError } =
+          await locals.supabaseServiceRole
+            .from("quiz_attempts")
+            .delete()
+            .eq("user_id", userId);
 
-        if (deleteQuizAttempts) {
-          console.error("Error deleting quiz attempts:", deleteQuizAttempts);
+        if (deleteQuizAttemptsError) {
+          console.error(
+            "Error deleting quiz attempts:",
+            deleteQuizAttemptsError,
+          );
           throw error(500, "Failed to reset quiz attempts");
         }
       }
 
       if (resetIncorrect) {
-        const { error: deleteIncorrectResponses } = await supabase
-          .from("incorrect_responses")
-          .delete()
-          .eq("user_id", userId);
+        const { error: deleteIncorrectResponsesError } =
+          await locals.supabaseServiceRole
+            .from("incorrect_responses")
+            .delete()
+            .eq("user_id", userId);
 
-        if (deleteIncorrectResponses) {
+        if (deleteIncorrectResponsesError) {
           console.error(
             "Error deleting incorrect responses:",
-            deleteIncorrectResponses,
+            deleteIncorrectResponsesError,
           );
           throw error(500, "Failed to reset incorrect responses");
         }
       }
 
       if (resetBookmarks) {
-        const { error: deleteBookmarks } = await supabase
+        const { error: deleteBookmarksError } = await locals.supabaseServiceRole
           .from("bookmarks")
           .delete()
           .eq("user_id", userId);
 
-        if (deleteBookmarks) {
-          console.error("Error deleting bookmarks:", deleteBookmarks);
+        if (deleteBookmarksError) {
+          console.error("Error deleting bookmarks:", deleteBookmarksError);
           throw error(500, "Failed to reset bookmarks");
         }
       }
