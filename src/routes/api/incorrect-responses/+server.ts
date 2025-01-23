@@ -1,37 +1,73 @@
-import { error, json } from "@sveltejs/kit";
-import type { RequestHandler } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
+import type { RequestHandler } from "./$types";
+import type { DbIncorrectResponse, IncorrectResponsePayload } from "./types";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-  const { questionId, choiceId } = await request.json();
-
-  if (!questionId || !choiceId) {
-    throw error(400, "Missing required fields");
-  }
-
   if (!locals.user) {
-    throw error(401, "Unauthorized");
+    return new Response("Unauthorized", { status: 401 });
   }
 
   try {
-    const supabase = locals.supabase;
+    const payload = (await request.json()) as IncorrectResponsePayload;
+    const { questionId, choiceId, quizAttemptId } = payload;
 
-    // Let Supabase generate the id and timestamp
-    const { error: createError } = await supabase
+    if (!questionId || !choiceId || !quizAttemptId) {
+      return json(
+        { success: false, message: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    // Verify the quiz attempt belongs to the user and is not completed
+    const { data: attemptData, error: attemptError } = await locals.supabase
+      .from("quiz_attempts")
+      .select("id, completed_at")
+      .eq("id", quizAttemptId)
+      .eq("user_id", locals.user.id)
+      .maybeSingle();
+
+    if (attemptError || !attemptData) {
+      return json(
+        { success: false, message: "Invalid quiz attempt" },
+        { status: 403 },
+      );
+    }
+
+    if (attemptData.completed_at) {
+      return json(
+        { success: false, message: "Cannot modify completed quiz attempt" },
+        { status: 400 },
+      );
+    }
+
+    const incorrectResponse: DbIncorrectResponse = {
+      user_id: locals.user.id,
+      quiz_attempt_id: quizAttemptId,
+      question_id: questionId,
+      choice_id: choiceId,
+    };
+
+    // Record the incorrect response using column names for conflict handling
+    const { error: insertError } = await locals.supabase
       .from("incorrect_responses")
-      .insert({
-        user_id: locals.user.id,
-        question_id: questionId,
-        choice_id: choiceId,
+      .upsert([incorrectResponse], {
+        onConflict: "quiz_attempt_id,question_id,choice_id",
       });
 
-    if (createError) {
-      console.error("DB Error:", createError);
-      throw error(500, "Error recording incorrect response");
+    if (insertError) {
+      console.error("Error recording incorrect response:", insertError);
+      return json(
+        { success: false, message: "Failed to record response" },
+        { status: 500 },
+      );
     }
 
     return json({ success: true });
-  } catch (e) {
-    console.error("Error recording incorrect response:", e);
-    throw error(500, "Internal server error");
+  } catch (error) {
+    console.error("Error in incorrect responses endpoint:", error);
+    return json(
+      { success: false, message: "Internal server error" },
+      { status: 500 },
+    );
   }
 };

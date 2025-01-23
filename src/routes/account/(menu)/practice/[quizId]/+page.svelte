@@ -33,46 +33,16 @@
   $: progress = ((selectedChoices.size / questions.length) * 100).toFixed(0);
   $: isLastQuestion = currentQuestionIndex === questions.length - 1;
   $: storageKey = `quiz_${quiz.id}_attempt_${attempt.id}`;
-  $: isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   onMount(() => {
     initializeQuizState();
     const autoSaveInterval = setInterval(saveQuizState, 5000);
 
-    if (!isMobile) {
-      document.addEventListener("keydown", handleKeyboardNavigation);
-    }
-
     return () => {
       clearInterval(autoSaveInterval);
       saveQuizState();
-      if (!isMobile) {
-        document.removeEventListener("keydown", handleKeyboardNavigation);
-      }
     };
   });
-
-  function handleKeyboardNavigation(event: KeyboardEvent) {
-    if (quizCompleted) return;
-
-    if (event.key === "ArrowRight" && selectedChoices.has(currentQuestion.id)) {
-      handleNext();
-    } else if (event.key === "ArrowLeft" && currentQuestionIndex > 0) {
-      currentQuestionIndex--;
-    } else if (event.key === "f") {
-      handleFlag();
-    } else if (event.key === "b") {
-      handleBookmark();
-    } else if (event.key >= "1" && event.key <= "4") {
-      const index = parseInt(event.key) - 1;
-      if (index < currentQuestion.choices.length) {
-        handleChoiceSelect(
-          currentQuestion.id,
-          currentQuestion.choices[index].id,
-        );
-      }
-    }
-  }
 
   function initializeQuizState() {
     const savedState = localStorage.getItem(storageKey);
@@ -98,7 +68,7 @@
         (q) => q.id === attempt.last_answered_question_id,
       );
       if (index !== -1) {
-        currentQuestionIndex = index;
+        currentQuestionIndex = index + 1; // Move to next unanswered question
       }
     }
     timeStarted = Date.now();
@@ -130,6 +100,7 @@
     selectedChoices = selectedChoices;
     saveQuizState();
 
+    // Record incorrect choices for immediate feedback
     if (showFeedback) {
       const correctChoice = currentQuestion.choices.find((c) => c.is_correct);
       if (correctChoice && choiceId !== correctChoice.id) {
@@ -143,6 +114,26 @@
     }
   }
 
+  async function recordIncorrectResponse(questionId: string, choiceId: string) {
+    try {
+      const response = await fetch("/api/incorrect-responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId,
+          choiceId,
+          quizAttemptId: attempt.id,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Error recording incorrect response");
+      }
+    } catch (error) {
+      console.error("Error recording incorrect response:", error);
+    }
+  }
+
   async function updateAttempt(attemptData: any) {
     if (!attempt.id) return;
     const response = await fetch(`/api/quiz-attempts/${attempt.id}`, {
@@ -151,18 +142,6 @@
       body: JSON.stringify(attemptData),
     });
     return response.ok;
-  }
-
-  async function recordIncorrectResponse(questionId: string, choiceId: string) {
-    try {
-      await fetch("/api/incorrect-responses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId, choiceId }),
-      });
-    } catch (error) {
-      console.error("Error recording incorrect response:", error);
-    }
   }
 
   async function handleNext() {
@@ -186,6 +165,7 @@
 
     try {
       let correctAnswers = 0;
+      // Record any remaining incorrect choices on submit
       for (const question of questions) {
         const selectedChoiceId = selectedChoices.get(question.id);
         const correctChoice = question.choices.find((c) => c.is_correct);
@@ -217,7 +197,7 @@
 
   function handleRetry() {
     localStorage.removeItem(storageKey);
-    window.location.reload();
+    window.location.href = `/account/practice/${quiz.id}?restart=true`;
   }
 
   function toggleFeedbackMode() {
@@ -226,6 +206,9 @@
   }
 
   function handleFlag() {
+    flaggedQuestions.has(currentQuestion.id)
+      ? flaggedQuestions.delete(currentQuestion.id)
+      : flaggedQuestions.add(currentQuestion.id);
     flaggedQuestions = flaggedQuestions;
     saveQuizState();
   }
@@ -245,8 +228,7 @@
       );
 
       if (!response.ok) {
-        const data = await response.json();
-        console.error("Bookmark error:", data.message);
+        console.error("Bookmark error");
         return;
       }
 
@@ -271,7 +253,6 @@
 </script>
 
 <div class="container mx-auto px-4 py-8 max-w-4xl">
-  <!-- Breadcrumb Navigation -->
   <nav class="breadcrumbs text-sm mb-6">
     <ul>
       <li><a href="/account/practice" class="link link-hover">Practice</a></li>
@@ -281,7 +262,6 @@
 
   <div class="mb-8">
     <QuizHeader {quiz} {showFeedback} onToggleFeedback={toggleFeedbackMode} />
-
     <QuizProgress
       questionsCount={questions.length}
       answeredCount={selectedChoices.size}
@@ -305,14 +285,13 @@
         onChoiceSelect={handleChoiceSelect}
         selectedChoice={selectedChoices.get(currentQuestion.id)}
         {showFeedback}
-        {incorrectChoices}
+        incorrectChoices={incorrectChoices.get(currentQuestion.id) || []}
         onFlag={handleFlag}
         onBookmark={handleBookmark}
         isFlagged={flaggedQuestions.has(currentQuestion.id)}
         isBookmarked={bookmarkedQuestions.has(currentQuestion.id)}
       />
 
-      <!-- Navigation -->
       <div class="card-body pt-0">
         <div class="flex justify-between mt-6">
           <button
@@ -320,10 +299,8 @@
               ? 'btn-disabled'
               : ''}"
             on:click={() => currentQuestionIndex--}
-            disabled={currentQuestionIndex === 0}
+            disabled={currentQuestionIndex === 0}>Previous</button
           >
-            Previous
-          </button>
           <button
             class="btn btn-primary {!selectedChoices.has(currentQuestion.id)
               ? 'btn-disabled'
@@ -331,9 +308,7 @@
             on:click={handleNext}
             disabled={!selectedChoices.has(currentQuestion.id) || isSubmitting}
           >
-            {#if isSubmitting}
-              <span class="loading loading-spinner"></span>
-            {/if}
+            {#if isSubmitting}<span class="loading loading-spinner"></span>{/if}
             {isLastQuestion ? "Submit Quiz" : "Next Question"}
           </button>
         </div>
@@ -346,18 +321,6 @@
           {bookmarkedQuestions}
           {selectedChoices}
         />
-
-        {#if !isMobile}
-          <div class="mt-4 text-sm text-base-content/70">
-            <p>Keyboard shortcuts:</p>
-            <ul class="list-disc list-inside">
-              <li>Arrow keys: Navigate between questions</li>
-              <li>1-4: Select answer choices</li>
-              <li>F: Flag question</li>
-              <li>B: Bookmark question</li>
-            </ul>
-          </div>
-        {/if}
       </div>
     </div>
   {/if}

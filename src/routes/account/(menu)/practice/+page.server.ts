@@ -1,53 +1,24 @@
-import { error } from "@sveltejs/kit"
-import type { PageServerLoad } from "./$types"
-import type { Subject, Category, Quiz } from "./types"
-
-interface DatabaseQuiz {
-  id: string
-  title: string
-  description: string | null
-  category_id: string
-  created_at: Date | null
-  updated_at: Date | null
-  is_active: boolean | null
-}
-
-interface DatabaseCategory {
-  id: string
-  subject_id: string
-  name: string
-  description: string | null
-  created_at: Date | null
-  updated_at: Date | null
-  quizzes: DatabaseQuiz[]
-}
-
-interface QuizAttemptRow {
-  id: string
-  quiz_id: string
-  user_id: string
-  completed_at: Date | null
-  score: number | null
-  started_at: Date | null
-  last_answered_question_id: string | null
-}
+import { error } from "@sveltejs/kit";
+import type { PageServerLoad } from "./$types";
+import type { Subject, Category, Quiz, DatabaseCategory } from "./types";
+import { QuizStatus } from "./types";
 
 export const load = (async ({ locals, url }) => {
-  const subjectId = url.searchParams.get("subject") || null
-  const supabase = locals.supabase
+  const subjectId = url.searchParams.get("subject") || null;
+  const supabase = locals.supabase;
 
   // Fetch all subjects
   const { data: subjects, error: subjectsError } = await supabase
     .from("subjects")
     .select("*")
-    .order("name")
+    .order("name");
 
   if (subjectsError) {
-    throw error(500, "Error fetching subjects")
+    throw error(500, "Error fetching subjects");
   }
 
   // If no subject is selected and we have subjects, use the first one
-  const activeSubjectId = subjectId || (subjects?.[0]?.id ?? null)
+  const activeSubjectId = subjectId || (subjects?.[0]?.id ?? null);
 
   if (!activeSubjectId) {
     return {
@@ -60,28 +31,28 @@ export const load = (async ({ locals, url }) => {
       categories: [],
       activeSubjectId: null,
       session: locals.session,
-    }
+    };
   }
 
-  // Get question counts for each quiz
+  // Get questions count per quiz
   const { data: quizQuestionsData, error: questionsError } = await supabase
     .from("quiz_questions")
-    .select("quiz_id")
+    .select("quiz_id");
 
   if (questionsError) {
-    throw error(500, "Error fetching quiz questions counts")
+    throw error(500, "Error fetching quiz questions counts");
   }
 
-  // Count questions per quiz manually
+  // Count questions per quiz
   const questionCountMap = (quizQuestionsData ?? []).reduce(
     (acc, { quiz_id }) => {
-      acc.set(quiz_id, (acc.get(quiz_id) || 0) + 1)
-      return acc
+      acc.set(quiz_id, (acc.get(quiz_id) || 0) + 1);
+      return acc;
     },
     new Map<string, number>(),
-  )
+  );
 
-  // Fetch categories for the active subject with their quizzes
+  // Fetch categories with their quizzes
   const { data: categoriesData, error: categoriesError } = await supabase
     .from("categories")
     .select(
@@ -91,57 +62,58 @@ export const load = (async ({ locals, url }) => {
         `,
     )
     .eq("subject_id", activeSubjectId)
-    .order("name")
+    .order("name");
 
   if (categoriesError) {
-    throw error(500, "Error fetching categories")
+    throw error(500, "Error fetching categories");
   }
 
-  const categories = (categoriesData as DatabaseCategory[]) ?? []
+  const categories = (categoriesData as DatabaseCategory[]) ?? [];
 
-  // Fetch quiz attempts for progress calculation
-  const { data: quizAttemptsData, error: attemptsError } = await supabase
+  // Fetch quiz attempts to determine status
+  const { data: quizAttempts, error: attemptsError } = await supabase
     .from("quiz_attempts")
     .select("*")
-    .eq("user_id", locals.user.id)
+    .eq("user_id", locals.user.id);
 
   if (attemptsError) {
-    throw error(500, "Error fetching quiz attempts")
+    throw error(500, "Error fetching quiz attempts");
   }
 
-  const quizAttempts = (quizAttemptsData as QuizAttemptRow[]) ?? []
+  // Create a map of quiz statuses
+  const quizStatusMap = new Map<string, QuizStatus>();
+  quizAttempts?.forEach((attempt) => {
+    // Only store the most recent attempt status
+    const currentStatus = quizStatusMap.get(attempt.quiz_id);
+    if (
+      !currentStatus ||
+      new Date(attempt.started_at) >
+        new Date(quizStatusMap.get(attempt.quiz_id)!)
+    ) {
+      quizStatusMap.set(
+        attempt.quiz_id,
+        attempt.completed_at ? QuizStatus.COMPLETED : QuizStatus.IN_PROGRESS,
+      );
+    }
+  });
 
-  // Calculate completion metrics for quizzes and categories
+  // Calculate completion metrics for categories
   const processedCategories = categories.map((category) => {
-    const quizzes = category.quizzes.map((quiz) => {
-      const attempts = quizAttempts.filter(
-        (attempt) => attempt.quiz_id === quiz.id,
-      )
-      const completedAttempts = attempts.filter(
-        (attempt) => attempt.completed_at !== null,
-      )
-      const totalQuestions = questionCountMap.get(quiz.id) ?? 0
-      const completedQuestions = completedAttempts.length
+    const quizzes = category.quizzes.map((quiz) => ({
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      category_id: quiz.category_id,
+      total_questions: questionCountMap.get(quiz.id) ?? 0,
+      status: quizStatusMap.get(quiz.id) ?? QuizStatus.NOT_STARTED,
+    }));
 
-      const quizData: Quiz = {
-        id: quiz.id,
-        title: quiz.title,
-        description: quiz.description,
-        category_id: quiz.category_id,
-        total_questions: totalQuestions,
-        completed_questions: completedQuestions,
-        completion:
-          totalQuestions > 0 ? (completedQuestions / totalQuestions) * 100 : 0,
-      }
-
-      return quizData
-    })
-
+    // Category completion is based on completed quizzes
+    const completedQuizzes = quizzes.filter(
+      (quiz) => quiz.status === QuizStatus.COMPLETED,
+    ).length;
     const categoryCompletion =
-      quizzes.length > 0
-        ? quizzes.reduce((sum, quiz) => sum + quiz.completion, 0) /
-          quizzes.length
-        : 0
+      quizzes.length > 0 ? (completedQuizzes / quizzes.length) * 100 : 0;
 
     const categoryData: Category = {
       id: category.id,
@@ -150,10 +122,10 @@ export const load = (async ({ locals, url }) => {
       description: category.description,
       quizzes,
       completion: categoryCompletion,
-    }
+    };
 
-    return categoryData
-  })
+    return categoryData;
+  });
 
   return {
     subjects:
@@ -165,5 +137,5 @@ export const load = (async ({ locals, url }) => {
     categories: processedCategories,
     activeSubjectId,
     session: locals.session,
-  }
-}) satisfies PageServerLoad
+  };
+}) satisfies PageServerLoad;
