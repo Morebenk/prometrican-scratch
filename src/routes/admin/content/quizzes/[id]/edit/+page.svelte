@@ -1,6 +1,7 @@
 <script lang="ts">
   import { setContext } from "svelte";
   import { writable } from "svelte/store";
+  import QuizQuestions from "./QuizQuestions.svelte";
 
   const adminSection = writable("content");
   setContext("adminSection", adminSection);
@@ -27,6 +28,22 @@
         name: string;
       };
     };
+    quiz_questions: {
+      id: string;
+      question_id: string;
+      order: number;
+      question: {
+        id: string;
+        content: string;
+        explanation: string | null;
+        image_url: string | null;
+        choices: {
+          id: string;
+          content: string;
+          is_correct: boolean;
+        }[];
+      };
+    }[];
   };
 
   type FormData = {
@@ -234,4 +251,16 @@
       </div>
     </div>
   </form>
+
+  <!-- Quiz Questions Section -->
+  <div class="card bg-base-100 shadow">
+    <div class="card-body">
+      <QuizQuestions
+        quizId={quiz.id}
+        categoryId={quiz.category.id}
+        questions={quiz.quiz_questions || []}
+        availableQuestions={data.availableQuestions || []}
+      />
+    </div>
+  </div>
 </div>

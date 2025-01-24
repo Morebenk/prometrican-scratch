@@ -3,6 +3,41 @@ import type { Database } from "../../../../../../DatabaseDefinitions";
 
 type QuizUpdate = Database["public"]["Tables"]["quizzes"]["Update"];
 
+interface QuizWithRelations {
+  id: string;
+  title: string;
+  description: string | null;
+  is_active: boolean;
+  category_id: string;
+  category: {
+    id: string;
+    name: string;
+    subject: {
+      id: string;
+      name: string;
+    };
+  };
+  quiz_attempts: {
+    count: number;
+  }[];
+  quiz_questions?: {
+    id: string;
+    order: number;
+    question_id: string;
+    question: {
+      id: string;
+      content: string;
+      explanation: string | null;
+      image_url: string | null;
+      choices: {
+        id: string;
+        content: string;
+        is_correct: boolean;
+      }[];
+    };
+  }[];
+}
+
 interface FormData {
   title?: string;
   description?: string;
@@ -25,12 +60,16 @@ export async function load({
   }
 
   try {
-    // Get the quiz data
-    const { data: quiz, error: quizError } = await supabase
+    // Get basic quiz data first
+    const { data, error: quizError } = await supabase
       .from("quizzes")
       .select(
         `
-        *,
+        id,
+        title,
+        description,
+        is_active,
+        category_id,
         category:categories(
           id,
           name,
@@ -45,12 +84,73 @@ export async function load({
       .eq("id", id)
       .single();
 
-    if (quizError || !quiz) {
+    if (quizError) {
+      console.error("Error fetching quiz:", quizError);
       throw error(404, "Quiz not found");
     }
 
-    // Get all subjects with their categories for the dropdown
-    const { data: subjects, error: fetchError } = await supabase
+    const quiz = data as QuizWithRelations;
+
+    if (!quiz) {
+      throw error(404, "Quiz not found");
+    }
+
+    // Get quiz questions with their details
+    const { data: quizQuestions, error: questionsError } = await supabase
+      .from("quiz_questions")
+      .select(
+        `
+        id,
+        order,
+        question_id,
+        question:questions(
+          id,
+          content,
+          explanation,
+          image_url,
+          choices(
+            id,
+            content,
+            is_correct
+          )
+        )
+      `,
+      )
+      .eq("quiz_id", id)
+      .order("order");
+
+    if (questionsError) {
+      console.error("Error fetching quiz questions:", questionsError);
+      throw error(500, "Failed to load quiz questions");
+    }
+
+    // Get all available questions for the quiz's category
+    const { data: availableQuestions, error: availableError } = await supabase
+      .from("questions")
+      .select(
+        `
+        id,
+        content,
+        explanation,
+        image_url,
+        category_id,
+        choices (
+          id,
+          content,
+          is_correct
+        )
+      `,
+      )
+      .eq("category_id", quiz.category_id)
+      .eq("is_active", true);
+
+    if (availableError) {
+      console.error("Error fetching available questions:", availableError);
+      throw error(500, "Failed to load available questions");
+    }
+
+    // Get all subjects with their categories
+    const { data: subjects, error: subjectsError } = await supabase
       .from("subjects")
       .select(
         `
@@ -64,14 +164,18 @@ export async function load({
       )
       .order("name");
 
-    if (fetchError) {
-      console.error("Error fetching subjects:", fetchError);
+    if (subjectsError) {
+      console.error("Error fetching subjects:", subjectsError);
       throw error(500, "Failed to load subjects");
     }
+
+    // Add the questions to the quiz object
+    quiz.quiz_questions = quizQuestions || [];
 
     return {
       quiz,
       subjects: subjects || [],
+      availableQuestions: availableQuestions || [],
       hasAttempts: quiz.quiz_attempts[0]?.count > 0,
     };
   } catch (err) {
